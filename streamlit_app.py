@@ -1,7 +1,3 @@
-# food_ordering_app.py
-# Streamlit Online Food-Ordering Platform
-# Run with:  streamlit run food_ordering_app.py
-# Required pkgs:  stream  plotly  pandas  numpy  streamlit-option-menu
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -13,7 +9,7 @@ import time
 # --------  PAGE CONFIG & STYLE  --------
 # ---------------------------------------
 st.set_page_config(
-    page_title="Gourmet Ordering",
+    page_title="Little rabbit's kitchen 🐰",
     page_icon="🍽️",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -60,7 +56,7 @@ if "orders" not in st.session_state:
 # ---------------------------------------
 menu = {
     "Chef's Favorites": {
-        "Signature Pizza": (18.99, "🍕", "Premium toppings & mozzarella"),
+        "肉末闷豆角": (18.99, "🍕", "Premium toppings & mozzarella"),
         "Gourmet Burger": (15.99, "🍔", "Wagyu beef & aged cheddar"),
         "Truffle Pasta": (22.99, "🍝", "Black-truffle cream sauce"),
     },
