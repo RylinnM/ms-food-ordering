@@ -95,7 +95,7 @@ with st.sidebar:
             total += qty * price
             if st.button(f"✖ Remove {item}", key=f"rm_{item}"):
                 del st.session_state.cart[item]
-                st.experimental_rerun()
+                st.rerun()
         st.markdown("---")
         st.subheader(f"Total  **${total:.2f}**")
         if st.button("🚀  Place Order", type="primary"):
@@ -116,7 +116,7 @@ with st.sidebar:
                 )
                 st.session_state.cart.clear()
                 time.sleep(1)
-                st.experimental_rerun()
+                st.rerun()
     else:
         st.info("Cart is empty")
 
@@ -128,7 +128,7 @@ with st.sidebar:
 # ---------------------------------------
 # -------------  MAIN TABS  -------------
 # ---------------------------------------
-st.markdown('<div class="main-header">🍽️ Gourmet Food Ordering</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-header">🍽️ Little Rabbit Kitchen 🐰</div>', unsafe_allow_html=True)
 tab_menu, tab_dash = st.tabs(["🍴 Menu", "📊 Analytics"])
 
 # ----- MENU TAB -----
@@ -157,7 +157,7 @@ with tab_menu:
                                 price,
                             )
                             st.success(f"Added {qty} × {dish}")
-                            st.experimental_rerun()
+                            st.rerun()
                         else:
                             st.warning("Select quantity > 0")
                     st.markdown("</div>", unsafe_allow_html=True)
@@ -223,4 +223,4 @@ with tab_dash:
     )
 
 st.markdown("---")
-st.write("© 2024 Gourmet Ordering Platform  |  Built with Streamlit")
+st.write("© 2025 Copyright Mr. Ma  |  With Little Song")
