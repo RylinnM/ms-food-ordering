@@ -151,10 +151,7 @@ with tab_menu:
             img_path = f"dish_photos/{file_name}"
             with cols[i % 3]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.markdown(
-                    f'<img src="{img_path}" class="dish-photo" alt="{dish}" />',
-                    unsafe_allow_html=True
-                )
+                st.image(img_path, use_column_width=True)
                 st.subheader(f"{emoji} {dish}")
                 st.caption(desc)
                 st.write(f"**${price:.2f}**")
@@ -172,6 +169,7 @@ with tab_menu:
                     else:
                         st.warning("Select quantity > 0")
                 st.markdown("</div>", unsafe_allow_html=True)
+
 
 # ----- DASHBOARD TAB -----
 with tab_dash:
