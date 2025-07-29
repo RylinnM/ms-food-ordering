@@ -182,7 +182,7 @@ with tab_menu:
             if not pr[0] <= price <= pr[1]:
                 continue
             with cols[i % 3]:
-                tile = st.container(height=430, border=False, key=f"tile_{cat}_{dish}")  # fixed height[4]
+                tile = st.container(height=1000, border=False, key=f"tile_{cat}_{dish}")  # fixed height[4]
                 with tile:
                     img_path = f"dish_photos/{dish.lower().replace(' ','_')}.jpeg"
                     try:
