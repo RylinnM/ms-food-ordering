@@ -155,7 +155,7 @@ with tab_menu:
                 # Streamlit's native approach with placeholder
                 placeholder = st.empty()
                 try:
-                    placeholder.image(img_path, use_column_width=True)
+                    placeholder.image(img_path, use_container_width=True)
                 except:
                     with placeholder.container():
                         st.info("📸 Image coming soon!")
