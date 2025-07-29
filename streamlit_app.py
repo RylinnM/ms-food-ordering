@@ -147,7 +147,7 @@ with tab_menu:
         for i, (dish, (price, emoji, desc)) in enumerate(items.items()):
             if not pr[0] <= price <= pr[1]:
                 continue
-            file_name = dish.lower().replace(" ", "_") + ".jpg"
+            file_name = dish.lower().replace(" ", "_") + ".jpeg"
             img_path = f"dish_photos/{file_name}"
             with cols[i % 3]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
