@@ -151,7 +151,16 @@ with tab_menu:
             img_path = f"dish_photos/{file_name}"
             with cols[i % 3]:
                 st.markdown('<div class="card">', unsafe_allow_html=True)
-                st.image(img_path, use_column_width=True)
+                
+                # Streamlit's native approach with placeholder
+                placeholder = st.empty()
+                try:
+                    placeholder.image(img_path, use_column_width=True)
+                except:
+                    with placeholder.container():
+                        st.info("📸 Image coming soon!")
+                        st.write(" " * 10)  # Spacing for consistency
+                
                 st.subheader(f"{emoji} {dish}")
                 st.caption(desc)
                 st.write(f"**${price:.2f}**")
