@@ -2,40 +2,42 @@ import streamlit as st
 import pandas as pd
 from datetime import datetime, timedelta
 import plotly.express as px
-import time
+import time, os, json, requests
+from PIL import Image
 
-# ---------------------------------------
-# --------  PAGE CONFIG & STYLE  --------
-# ---------------------------------------
+# ---------- PAGE CONFIG & STYLE ----------
 st.set_page_config(
     page_title="Little rabbit's kitchen 🐰",
     page_icon="🍽️",
     layout="wide",
     initial_sidebar_state="expanded",
 )
+
 st.markdown(
     """
     <style>
       .main-header{font-size:3rem;font-weight:700;color:#FF6B35;text-align:center}
       .category{background:linear-gradient(90deg,#FF6B35,#F7931E);
                 padding:8px;border-radius:8px;color:#fff;font-weight:600;margin:4px 0}
-      .card{background:#fafafa;border:1px solid #eee;
-            border-radius:8px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06)}
-      .dish-photo{width:100%;height:auto;border-radius:6px;margin-bottom:8px}
-    </style>
-    """,
+      /* cards all same height */
+      [data-testid="stVerticalBlock"] > div {height:100%}
+      .card{background:#fafafa;border:1px solid #eee;border-radius:8px;
+            padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.06);height:100%;
+            display:flex;flex-direction:column}
+      .dish-photo{width:100%;height:180px;object-fit:cover;border-radius:6px;margin-bottom:8px}
+    </style>""",
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------
-# ------------  APP STATE  --------------
-# ---------------------------------------
+# ---------- APP STATE ----------
 if "cart" not in st.session_state:
     st.session_state.cart = {}
 if "orders" not in st.session_state:
     st.session_state.orders = pd.DataFrame(
         columns=["date", "amount", "items", "cat", "rating", "dish"]
     )
+if "pending_ratings" not in st.session_state:
+    st.session_state.pending = []
 
 # ---------------------------------------
 # -------------  MENU DATA  -------------
@@ -92,17 +94,41 @@ menu = {
     },
 }
 
-# ---------------------------------------
-# ------------  SIDEBAR CART ------------
-# ---------------------------------------
+# ---------- HELPERS ----------
+def send_slack_msg(text: str):
+    url = st.secrets.get("slack_webhook")
+    if not url:
+        return
+    try:
+        requests.post(url, json={"text": text}, timeout=5)
+    except Exception as e:
+        st.warning(f"Slack notification failed: {e}")
+
+def add_ratings_UI():
+    if not st.session_state.pending:
+        return
+    with st.sidebar.expander("⭐ Rate your dishes!", expanded=True):
+        for dish in st.session_state.pending.copy():
+            stars = st.feedback("stars", key=f"rate_{dish}")
+            if stars is not None:
+                # stars is 0-based → +1 for human rating
+                rows = st.session_state.orders[
+                    (st.session_state.orders["dish"] == dish) &
+                    (st.session_state.orders["rating"].isna())
+                ].index
+                st.session_state.orders.loc[rows, "rating"] = stars + 1
+                st.session_state.pending.remove(dish)
+                st.toast(f"Thanks for rating {dish}!")
+
+# ---------- SIDEBAR CART ----------
 with st.sidebar:
     st.header("🛒  Cart")
     if st.session_state.cart:
         for dish, (qty, price) in st.session_state.cart.items():
             st.write(f"**{dish}** × {qty} = ${qty*price:.2f}")
             if st.button(f"✖ Remove {dish}", key=f"rm_{dish}"):
-                del st.session_state.cart[dish]
-                st.rerun()
+                del st.session_state.cart[dish]; st.rerun()
+
         st.markdown("---")
         if st.button("🚀 Place Order", type="primary"):
             new_rows = []
@@ -112,33 +138,41 @@ with st.sidebar:
                     "amount": price,
                     "items": 1,
                     "cat": "Mixed",
-                    "rating": 5,
+                    "rating": None,         # will be filled later
                     "dish": dish
                 }] * qty)
             st.session_state.orders = pd.concat(
                 [st.session_state.orders, pd.DataFrame(new_rows)],
                 ignore_index=True
             )
+            # remember dishes needing ratings
+            st.session_state.pending.extend({r["dish"] for r in new_rows})
+            # build Slack message
+            total = sum(qty*price for qty, price in st.session_state.cart.values())
+            lines = [f"*New order* – {datetime.now():%Y-%m-%d %H:%M}"]
+            for dish,(qty,price) in st.session_state.cart.items():
+                lines.append(f"• {qty} × {dish} – ${qty*price:.2f}")
+            lines.append(f"*Total:* ${total:.2f}")
+            send_slack_msg("\n".join(lines))
             st.session_state.cart.clear()
-            st.success("Order placed! 🎉")
-            time.sleep(1)
-            st.rerun()
+            st.success("Order placed! 🎉  Please rate your dishes ➡")
+            time.sleep(1); st.rerun()
     else:
         st.info("Cart is empty")
 
     st.markdown("---")
-    st.header("🔍  Filters")
-    pr = st.slider("Price range", 0, 50, (0, 50), step=5)
-    cats = st.multiselect("Categories", list(menu.keys()), default=list(menu.keys()))
+    with st.expander("🔍 Browse", expanded=False):   # ← collapsible filters
+        pr = st.slider("Price range", 0, 50, (0, 50), step=5)
+        cats = st.multiselect("Categories", list(menu.keys()), default=list(menu.keys()))
 
-# ---------------------------------------
-# -------------  MAIN TABS  -------------
-# ---------------------------------------
+# ---------- MAIN TABS ----------
 st.markdown('<div class="main-header">🍽️ Little Rabbit Kitchen 🐰</div>', unsafe_allow_html=True)
 tab_menu, tab_dash = st.tabs(["🍴 Menu", "📊 Analytics"])
 
 # ----- MENU TAB -----
 with tab_menu:
+    add_ratings_UI()  # show rating prompt if needed
+
     for cat, items in menu.items():
         if cat not in cats:
             continue
@@ -147,74 +181,56 @@ with tab_menu:
         for i, (dish, (price, emoji, desc)) in enumerate(items.items()):
             if not pr[0] <= price <= pr[1]:
                 continue
-            file_name = dish.lower().replace(" ", "_") + ".jpeg"
-            img_path = f"dish_photos/{file_name}"
             with cols[i % 3]:
-                st.markdown('<div class="card">', unsafe_allow_html=True)
-                
-                # Streamlit's native approach with placeholder
-                placeholder = st.empty()
-                try:
-                    placeholder.image(img_path, use_container_width=True)
-                except:
-                    with placeholder.container():
+                tile = st.container(height=430, border=False, key=f"tile_{cat}_{dish}")  # fixed height[4]
+                with tile:
+                    img_path = f"dish_photos/{dish.lower().replace(' ','_')}.jpeg"
+                    try:
+                        st.image(img_path, use_container_width=True, caption=None, output_format="JPEG")
+                    except:
                         st.info("📸 Image coming soon!")
-                        st.write(" " * 10)  # Spacing for consistency
-                
-                st.subheader(f"{emoji} {dish}")
-                st.caption(desc)
-                st.write(f"**${price:.2f}**")
-                qty = st.number_input(
-                    "Qty", 0, 10, 0, key=f"q_{cat}_{dish}", label_visibility="collapsed"
-                )
-                if st.button("Add to cart", key=f"add_{cat}_{dish}"):
-                    if qty:
-                        st.session_state.cart[dish] = (
-                            st.session_state.cart.get(dish, (0, price))[0] + qty,
-                            price,
-                        )
-                        st.success(f"Added {qty} × {dish}")
-                        st.rerun()
-                    else:
-                        st.warning("Select quantity > 0")
-                st.markdown("</div>", unsafe_allow_html=True)
-
+                    st.subheader(f"{emoji} {dish}")
+                    st.caption(desc)
+                    st.write(f"**${price:.2f}**")
+                    qty = st.number_input("Qty", 0, 10, 0,
+                        key=f"q_{cat}_{dish}", label_visibility="collapsed")
+                    if st.button("Add to cart", key=f"add_{cat}_{dish}"):
+                        if qty:
+                            st.session_state.cart[dish] = (
+                                st.session_state.cart.get(dish, (0, price))[0] + qty,
+                                price,
+                            )
+                            st.success(f"Added {qty} × {dish}")
+                            st.rerun()
+                        else:
+                            st.warning("Select quantity > 0")
 
 # ----- DASHBOARD TAB -----
 with tab_dash:
     st.header("📊 Restaurant Dashboard")
     now = datetime.now()
-    df_3 = st.session_state.orders[
-        st.session_state.orders["date"] >= now - timedelta(days=3)
-    ]
-    df_14 = st.session_state.orders[
-        st.session_state.orders["date"] >= now - timedelta(days=14)
-    ]
+    df_3  = st.session_state.orders[st.session_state.orders["date"] >= now - timedelta(days=3)]
+    df_14 = st.session_state.orders[st.session_state.orders["date"] >= now - timedelta(days=14)]
 
     def most_liked(df):
         return df.groupby("dish")["rating"].mean().idxmax() if not df.empty else "N/A"
 
     col1, col2 = st.columns(2)
-    with col1:
-        st.subheader("Past 3 Days")
-        st.metric("Total Orders", f"{len(df_3):,}")
-        st.metric("Most-Liked Dish", most_liked(df_3))
-        avg3 = df_3["rating"].mean() if not df_3.empty else 0
-        st.metric("Average Rating", f"{avg3:.1f} / 5")
-    with col2:
-        st.subheader("Past 14 Days")
-        st.metric("Total Orders", f"{len(df_14):,}")
-        st.metric("Most-Liked Dish", most_liked(df_14))
-        avg14 = df_14["rating"].mean() if not df_14.empty else 0
-        st.metric("Average Rating", f"{avg14:.1f} / 5")
+    for df, title, col in [(df_3,"Past 3 Days",col1),(df_14,"Past 14 Days",col2)]:
+        with col:
+            st.subheader(title)
+            st.metric("Total Orders", f"{len(df):,}")
+            st.metric("Most-Liked Dish", most_liked(df))
+            avg = df["rating"].mean() if not df.empty else 0
+            st.metric("Average Rating", f"{avg:.1f} / 5")
 
     st.markdown("----")
     if not df_14.empty:
         daily = df_14.groupby(df_14["date"].dt.date).size().reset_index(name="orders")
         st.plotly_chart(
-            px.bar(daily, x="date", y="orders", title="Daily Order Count (14d)"),
+            px.bar(daily, x="date", y="orders", title="Daily Order Count (14 days)"),
             use_container_width=True,
         )
 
 st.markdown("---")
-st.write("© 2025 Copyright Mr. Ma  |  With Little Song")
+st.write("© 2025 Mr. Ma  |  With Little Song")
